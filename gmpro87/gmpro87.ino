@@ -95,42 +95,48 @@ void scanNetworks() {
 
 // --- WEB UI ---
 void handleRoot() {
-  String html = F("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
-  html += F("<title>GMpro87</title><style>");
-  html += F("body{background:#0a0a0a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;margin:0;padding:20px;}");
-  html += F(".container{max-width:800px;margin:0 auto;}");
-  html += F("h1{color:#00ff88;text-align:center;font-size:2.5em;margin-bottom:20px;}");
-  html += F(".card{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:20px;margin-bottom:20px;}");
-  html += F(".btn{background:#00ff88;color:#0a0a0a;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:bold;margin:5px;}");
-  html += F(".btn:hover{background:#00cc66;}");
-  html += F(".btn-danger{background:#ff4444;} .btn-danger:hover{background:#cc0000;}");
-  html += F("table{width:100%;border-collapse:collapse;}");
-  html += F("th,td{padding:12px;border-bottom:1px solid #333;text-align:left;}");
-  html += F("th{color:#00ff88;}");
-  html += F(".status{display:inline-block;padding:6px 12px;border-radius:6px;font-size:0.9em;}");
-  html += F(".status-on{background:#00ff88;color:#000;}");
-  html += F(".status-off{background:#333;color:#888;}");
-  html += F("</style></head><body><div class='container'>");
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+  html += "<title>GMpro87</title><style>";
+  html += "body{background:#0a0a0a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;margin:0;padding:20px;}";
+  html += ".container{max-width:800px;margin:0 auto;}";
+  html += "h1{color:#00ff88;text-align:center;font-size:2.5em;margin-bottom:20px;}";
+  html += ".card{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:20px;margin-bottom:20px;}";
+  html += ".btn{background:#00ff88;color:#0a0a0a;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:bold;margin:5px;}";
+  html += ".btn:hover{background:#00cc66;}";
+  html += ".btn-danger{background:#ff4444;} .btn-danger:hover{background:#cc0000;}";
+  html += "table{width:100%;border-collapse:collapse;}";
+  html += "th,td{padding:12px;border-bottom:1px solid #333;text-align:left;}";
+  html += "th{color:#00ff88;}";
+  html += ".status{display:inline-block;padding:6px 12px;border-radius:6px;font-size:0.9em;}";
+  html += ".status-on{background:#00ff88;color:#000;}";
+  html += ".status-off{background:#333;color:#888;}";
+  html += "</style></head><body><div class='container'>";
   
-  html += F("<h1>GMpro87</h1>");
-  html += F("<div class='card'><h2>WiFi Networks</h2>");
-  html += F("<p>Found: " + String(targetData.num) + " networks</p>");
-  html += F("<table><tr><th>#</th><th>SSID</th><th>Channel</th><th>BSSID</th></tr>");
+  html += "<h1>GMpro87</h1>";
+  html += "<div class='card'><h2>WiFi Networks</h2>";
+  html += "<p>Found: " + String(targetData.num) + " networks</p>";
+  html += "<table><tr><th>#</th><th>SSID</th><th>Channel</th><th>BSSID</th></tr>";
   
   for (int i = 0; i < targetData.num; i++) {
-    html += F("<tr><td>" + String(i+1) + "</td><td>" + targetData.ssid[i].c_str() + "</td><td>" + String(targetData.channel[i]) + "</td><td>" + WiFi.BSSIDstr(i) + "</td></tr>");
+    html += "<tr><td>" + String(i+1) + "</td><td>" + targetData.ssid[i].c_str() + "</td><td>" + String(targetData.channel[i]) + "</td><td>" + WiFi.BSSIDstr(i) + "</td></tr>";
   }
-  html += F("</table></div>");
+  html += "</table></div>";
   
-  html += F("<div class='card'><h2>Attack Control</h2>");
-  html += F("<p>Status: <span class='status " + String(isAttacking ? "status-on'>RUNNING" : "status-off'>STOPPED") + "</span></p>");
-  html += F("<a href='/scan'><button class='btn'>Scan Networks</button></a> ");
-  html += F("<a href='/attack'><button class='btn " + String(isAttacking ? "btn-danger" : "") + "'>" + String(isAttacking ? "Stop Attack" : "Start Attack") + "</button></a>");
-  html += F("</div>");
+  html += "<div class='card'><h2>Attack Control</h2>";
+  html += "<p>Status: <span class='status ";
+  html += isAttacking ? "status-on'>RUNNING" : "status-off'>STOPPED";
+  html += "</span></p>";
+  html += "<a href='/scan'><button class='btn'>Scan Networks</button></a> ";
+  html += "<a href='/attack'><button class='btn ";
+  html += isAttacking ? "btn-danger" : "";
+  html += "'>";
+  html += isAttacking ? "Stop Attack" : "Start Attack";
+  html += "</button></a>";
+  html += "</div>";
   
-  html += F("<div class='card'><h2>System</h2>");
-  html += F("<p>GMpro87 v1.0 | ESP32-WROOM-32U</p>");
-  html += F("</div></div></body></html>");
+  html += "<div class='card'><h2>System</h2>";
+  html += "<p>GMpro87 v1.0 | ESP32-WROOM-32U</p>";
+  html += "</div></div></body></html>";
   
   server.send(200, "text/html", html);
 }
