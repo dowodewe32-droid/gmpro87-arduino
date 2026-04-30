@@ -18,10 +18,13 @@ jobs:
           cli-compile-flags: |
             - --warnings=default
             - --export-binaries
+            - --build-cache-path=build-cache
           sketch-paths: |
             - gmpro87
+      - name: Find binaries
+        run: find . -name "*.bin" -type f
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: gmpro87/build/*.bin
+          path: build-cache/*.bin
