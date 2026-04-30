@@ -27,4 +27,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: build-cache/*.bin
+          path: |
+            gmpro87/build/esp32.esp32.esp32/gmpro87.ino.bin
