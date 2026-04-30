@@ -17,12 +17,12 @@ jobs:
               source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           cli-compile-flags: |
             - --warnings=default
-            - --build-property=partition_type=min_spiffs
+            - --build-property=build.partitions=min_spiffs.csv
           sketch-paths: |
-            - arduino-deauth.ino
+            - gmpro87
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: |
-            /root/.arduino/build-cache/*.bin
+            gmpro87/build/*.bin
