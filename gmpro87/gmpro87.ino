@@ -173,18 +173,24 @@ void setup() {
   pinMode(btnScan, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
 
-  // WiFi AP Mode (FIXED: Tidak diganggu dengan WIFI_STA setelahnya)
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP("GMpro", "Sangkur87");
+  // 1. INISIALISASI MODE AP+STA SEKALIGUS (TIDAK BISA MEMATIKAN AP NANTI!)
+  WiFi.mode(WIFI_AP_STA);  // AP + STA sekaligus
+  
+  // 2. BUAT AP (AKAN TETAP HIDUP SELAMA MODE AP_STA)
+  bool apOK = WiFi.softAP("GMpro", "Sangkur87");
+  if (!apOK) {
+    Serial.println("[!!!] GAGAL BUAT AP!");
+    while(1) delay(1000);
+  }
   Serial.println("\n[+] AP Created: GMpro / Sangkur87");
+  Serial.print("[+] AP IP: "); Serial.println(WiFi.softAPIP());
   Serial.println("[+] Web UI: http://192.168.4.1");
 
-  // WiFi Scan Mode (HANYA UNTUK SCAN)
-  WiFi.mode(WIFI_AP_STA); // AP+STA mode, AP tetap hidup
-  WiFi.disconnect();
+  // 3. SCAN PREP (STA bagian dari AP_STA)
+  WiFi.disconnect();  // Putus koneksi STA, tapi AP tetap hidup
   esp_wifi_set_promiscuous(true);
 
-  // Web Server
+  // 4. WEB SERVER
   server.on("/", handleRoot);
   server.on("/scan", handleScan);
   server.on("/attack", handleAttack);
@@ -193,7 +199,7 @@ void setup() {
   Serial.println("\n============================");
   Serial.println("  GMpro87 v1.2 - Fixed");
   Serial.println("============================");
-  Serial.println("D3: Scan | D2: Attack ON/OFF");
+  Serial.println("D2: Toggle Attack | D3: Scan");
   Serial.println("Web: http://192.168.4.1");
 }
 
