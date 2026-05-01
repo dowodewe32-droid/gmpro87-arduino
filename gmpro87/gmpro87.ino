@@ -2,6 +2,7 @@
 #include <WebServer.h>
 #include <vector>
 #include <string>
+#include "esp_wifi.h"
 
 // --- PIN CONFIG ---
 const int btnDeauth = 2;
