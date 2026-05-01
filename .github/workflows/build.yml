@@ -9,23 +9,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: arduino/compile-sketches@v1
-        with:
-          fqbn: esp32:esp32:esp32
-          platforms: |
-            - name: "esp32:esp32"
-              source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-          cli-compile-flags: |
-            - --warnings=default
-            - --export-binaries
-            - --build-cache-path=build-cache
-          sketch-paths: |
-            - gmpro87
-      - name: Find binaries
-        run: find . -name "*.bin" -type f
-      - name: Upload
+      
+      - name: Setup Arduino CLI
+        run: |
+          mkdir -p ~/.local/bin
+          curl -fSL https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz | tar xz -C ~/.local/bin --strip-components=1
+          export PATH="$HOME/.local/bin:$PATH"
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
+      
+      - name: Compile Sketch
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries -p gmpro87/gmpro87.ino
+      
+      - name: Merge Binary
+        run: |
+          cd gmpro87/build/esp32.esp32.esp32
+          # Merge bootloader (0x1000) + partitions (0x8000) + boot_app0 (0xe000) + app (0x10000)
+          ~/.arduino15/packages/esp32/tools/esptool_py/4.6/esptool.py --chip esp32 merge_bin \
+            -o /tmp/gmpro87_v1.2_combined.bin \
+            0x1000 bootloader/bootloader.bin \
+            0x8000 partitions.bin \
+            0xe000 boot_app0.bin \
+            0x10000 gmpro87.ino.bin
+      
+      - name: Upload Combined
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: |
-            gmpro87/build/esp32.esp32.esp32/gmpro87.ino.bin
+          path: /tmp/gmpro87_v1.2_combined.bin
