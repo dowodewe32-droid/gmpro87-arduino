@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include "esp_wifi.h"
 #include <WebServer.h>
 #include <vector>
 #include <string>
@@ -128,7 +129,7 @@ void loop() {
   }
 
   if (isAttacking && targetData.num > 0) {
-    for (int i = 0; i < targetData.num; i++) {
+    for (int i = 0; i < targetData.num; i++) { yield();
       if (!isAttacking) break;
       int ch = targetData.channel[i];
       if (ch < 1) ch = 1; if (ch > 13) ch = 13;
