@@ -101,8 +101,23 @@ void scanNet() {
 }
 
 // --- WEB UI ---
-void handleRoot() {
-  String uptime = "";
+String getHTML() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>GMpro87</title>";
+  html += "<style>body{background:#111;color:#fff;font-family:sans-serif;padding:20px;text-align:center}";
+  html += "h1{color:#0f0;text-shadow:0 0 10px #0f0}";
+  html += ".btn{display:inline-block;padding:15px 30px;background:#0f0;color:#000;border:none;border-radius:8px;font-size:18px;margin:10px;cursor:pointer}";
+  html += ".btnred{background:#f00;color:#fff}";
+  html += ".info{background:#222;padding:15px;border-radius:8px;margin:10px 0}";
+  html += "</style></head><body>";
+  html += "<h1>GMpro87 v2.1</h1>";
+  html += "<div class='info'><p>Networks: " + String(targetData.num) + "</p>";
+  html += "<p>Status: " + String(isAttacking ? "ATTACKING" : "IDLE") + "</p></div>";
+  html += "<a href='/'><button class='btn'>Refresh</button></a> ";
+  html += "<a href='/scan'><button class='btn'>Scan</button></a> ";
+  html += "<a href='/attack'><button class='btn" + String(isAttacking ? "red" : "") + "'>" + String(isAttacking ? "Stop" : "Attack") + "</button></a>";
+  html += "<p><small>ESP32-WROOM-32U</small></p></body></html>";
+  return html;
+}
   if (isAttacking && attackStartTime > 0) {
     unsigned long elapsed = (millis() - attackStartTime) / 1000;
     int m = elapsed / 60; int s = elapsed % 60;
@@ -230,36 +245,48 @@ void handleBeacon() {
 // --- SETUP ---
 void setup() {
   Serial.begin(115200);
-  delay(500);
-  Serial.println("[*] Starting GMpro87...");
+  delay(1000);
+  Serial.println("\n[*] GMpro87 v2.1 Starting...");
 
   pinMode(btnDeauth, INPUT_PULLUP);
   pinMode(btnScan, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
-  Serial.println("[*] Starting WiFi AP...");
+  // Start WiFi AP first
+  Serial.println("[*] Starting AP...");
+  WiFi.mode(WIFI_AP);
+  delay(100);
   
-  bool apStarted = WiFi.softAP("GMpro", "Sangkur87");
-  Serial.print("[+] AP started: "); Serial.println(apStarted ? "YES" : "NO");
-  
+  bool apReady = WiFi.softAP("GMpro", "Sangkur87");
+  Serial.print("[+] AP ready: "); Serial.println(apReady ? "OK" : "FAIL");
   delay(500);
-  Serial.print("[+] IP: "); Serial.println(WiFi.softAPIP());
   
-  // Force AP channel
-  esp_wifi_set_channel(6, WIFI_SECOND_CHAN_NONE);
-  delay(200);
+  IPAddress ip = WiFi.softAPIP();
+  Serial.print("[+] IP: "); Serial.println(ip);
+
+  // Start web server
+  Serial.println("[*] Starting web server...");
+  // Simple route handler
+  server.on("/", []() {
+    server.send(200, "text/html", getHTML());
+  });
+  server.on("/scan", []() {
+    scanNet();
+    server.send(200, "text/plain", "Scanned " + String(targetData.num) + " networks");
+  });
+  server.on("/attack", []() {
+    isAttacking = !isAttacking;
+    server.send(200, "text/plain", isAttacking ? "Attack ON" : "Attack OFF");
+  });
+  server.on("/beacon", []() {
+    isBeaconSpam = !isBeaconSpam;
+    server.send(200, "text/plain", isBeaconSpam ? "Beacon ON" : "Beacon OFF");
+  });
+  server.begin(80);
   
-  delay(500);
-  esp_wifi_set_promiscuous(true);
-
-  server.on("/", handleRoot);
-  server.on("/scan", handleScan);
-  server.on("/attack", handleAttack);
-  server.on("/beacon", handleBeacon);
-  server.begin();
-
-  Serial.println("[+] GMpro87 v2.0 Ready");
+  Serial.println("[+] GMpro87 v2.1 Ready!");
+  Serial.println("[*] Web: http://192.168.4.1");
 }
 
 // --- LOOP ---
