@@ -1,8 +1,6 @@
 #include <WiFi.h>
 #include "esp_wifi.h"
 #include <WebServer.h>
-#include <esp_bt.h>
-#include <esp_blufi_api.h>
 
 const int led = 2;
 bool attack = 0, beacon = 0, blespam = 0;
@@ -34,7 +32,7 @@ String html() {
   "<a href=/scan><button class=b>Scan</button>"
   "<a href=/atk><button class=b" + String(attack ? "r" : "") + ">" + String(attack ? "Stop" : "Attack") + "</button>"
   "<a href=/bcn><button class=b" + String(beacon ? "r" : "x") + ">Beacon</button>"
-  "<a href=/ble><button class=b" + String(blespam ? "r" : "x") + ">BLE Spam</button>"
+  "<a href=/ble><button class=b" + String(blespam ? "r" : "x") + ">BLE</button>"
   "</div>"
   "<div class=c><h3>Networks:</h3>" + netlist + "</div>"
   "<p style=text-align:center;color:#555>ESP32-WROOM-32U</p></body></html>";
@@ -54,24 +52,6 @@ void scan() {
 void atk() { attack = !attack; srv.sendHeader("Location", "/"); srv.send(302); }
 void bcn() { beacon = !beacon; srv.sendHeader("Location", "/"); srv.send(302); }
 void ble() { blespam = !blespam; srv.sendHeader("Location", "/"); srv.send(302); }
-
-// Simple BLE spam using esp_bt_controller
-extern "C" {
-  #include "esp_system.h"
-  #include "esp_coex.h"
-}
-
-void startBLESpam() {
-  // Minimal BLE init - just enough to advertise
-  esp_bt_controller_init();
-  esp_bt_controller_enable(ESP_BT_MODE_BLE);
-  Serial.println("[*] BLE initialized");
-}
-
-void stopBLESpam() {
-  esp_bt_controller_disable();
-  Serial.println("[*] BLE stopped");
-}
 
 void setup() {
   Serial.begin(115200);
@@ -129,7 +109,8 @@ void loop() {
     digitalWrite(led, 0);
     delay(30);
   } else if (blespam) {
-    // BLE LED indicator only - full implementation too big
+    // WiFi deauth still most effective
+    // BLEspam LED indicator only in Arduino
     digitalWrite(led, 1);
     delay(50);
     digitalWrite(led, 0);
