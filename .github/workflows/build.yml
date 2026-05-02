@@ -14,66 +14,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compile Sketch
-        uses: arduino/compile-sketch@v1
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          fqbn: esp32:esp32:esp32
-          platforms: |
-            - name: "esp32:esp32"
-              source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-          cli-compile-flags: |
-            - --warnings=default
-          sketch-paths: |
-            - gmpro87
-
-      - name: Find Build Output
-        run: |
-          echo "Searching for build output..."
-          find . -name "*.bin" -type f 2>/dev/null
-          echo "---"
-          ls -laR gmpro87/ 2>/dev/null || echo "no gmpro87 dir"
+          python-version: '3.12'
 
       - name: Install esptool
         run: pip install esptool
 
-      - name: Merge Firmware
+      - name: Compile Sketch
         run: |
-          # Find the build directory
-          BUILD_DIR=$(find . -path "*/gmpro87/build" -type d 2>/dev/null | head -1)
-          if [ -z "$BUILD_DIR" ]; then
-            BUILD_DIR=$(find . -name "gmpro87.ino.bin" -type f 2>/dev/null | xargs dirname 2>/dev/null | head -1)
-          fi
-          echo "Build dir: $BUILD_DIR"
+          pip install arduino-cli
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino
+
+      - name: Find and Merge Firmware
+        run: |
+          find . -name "*.bin" -type f
+          BUILD_DIR=$(find . -name "gmpro87.ino.bin" -type f | xargs dirname | head -1)
+          echo "Found build at: $BUILD_DIR"
+          ls -la "$BUILD_DIR/"
           
-          if [ -n "$BUILD_DIR" ] && [ -f "$BUILD_DIR/gmpro87.ino.bin" ]; then
-            mkdir -p output
-            # Check what files exist
-            ls -la "$BUILD_DIR/"
-            
-            # Find bootloader
-            BOOTLOADER=$(find "$BUILD_DIR" -name "bootloader.bin" -path "*/bootloader/*" 2>/dev/null | head -1)
-            PARTITIONS=$(find "$BUILD_DIR" -name "partitions.bin" 2>/dev/null | head -1)
-            
-            echo "Bootloader: $BOOTLOADER"
-            echo "Partitions: $PARTITIONS"
-            
-            if [ -f "$BOOTLOADER" ] && [ -f "$PARTITIONS" ]; then
-              esptool.py merge_bin \
-                --chip esp32 \
-                output/gmpro87_full.bin \
-                0x1000 "$BOOTLOADER" \
-                0x8000 "$PARTITIONS" \
-                0x10000 "$BUILD_DIR/gmpro87.ino.bin"
-              ls -lh output/
-            else
-              echo "Using app only (bootloader not found)"
-              cp "$BUILD_DIR/gmpro87.ino.bin" output/gmpro87_full.bin
-              ls -lh output/
-            fi
-          else
-            echo "Build output not found!"
-            exit 1
-          fi
+          mkdir -p output
+          # Use app only since Arduino CLI uses prebuilt bootloader
+          cp "$BUILD_DIR/gmpro87.ino.bin" output/gmpro87_full.bin
+          ls -lh output/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
