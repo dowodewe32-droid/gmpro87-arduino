@@ -1,12 +1,9 @@
-name: Build & Release Firmware
+name: Build GMpro87 with Large Partition
 
 on:
   push:
     branches: [master]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -19,14 +16,31 @@ jobs:
           curl -fsSL https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz | tar xz
           chmod +x arduino-cli
 
+      - name: Create custom partition
+        run: |
+          # Custom CSV with larger app partition
+          cat > partitions_custom.csv << 'EOF'
+          # Name,   Type, SubType, Offset,  Size, Flags
+          nvs,     data, nvs,     0x9000,  0x5000,
+          otadata,  data, ota,     0xe000,  0x2000,
+          app0,    app,  ota_0,    0x20000, 0x2E0000,
+          app1,    app,  ota_1,    0x300000,0x2E0000,
+          spiffs,  data, spiffs,  0x5E0000,0x820000,
+          EOF
+          echo "Custom partition created"
+
       - name: Setup ESP32 Core
         run: |
           ./arduino-cli core update-index
           ./arduino-cli core install esp32:esp32@3.3.8
 
-      - name: Compile
+      - name: Compile with custom partition
         run: |
-          ./arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino --output-dir build
+          ./arduino-cli compile \
+            -b esp32:esp32:esp32 \
+            --config-file partitions_custom.csv \
+            gmpro87/gmpro87.ino \
+            --output-dir build
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
