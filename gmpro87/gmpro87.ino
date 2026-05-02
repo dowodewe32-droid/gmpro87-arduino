@@ -5,9 +5,10 @@
 #include <string>
 
 // --- PIN CONFIG ---
-const int btnDeauth = 2;
-const int btnScan = 3;
-const int ledPin = 8;
+// Using safer pins for ESP32 DevKit
+const int btnDeauth = 35;  // Input only, no boot issue
+const int btnScan = 34;     // Input only, no boot issue  
+const int ledPin = 2;      // Common LED pin
 
 // --- DATA ---
 struct wifiData {
@@ -229,17 +230,27 @@ void handleBeacon() {
 // --- SETUP ---
 void setup() {
   Serial.begin(115200);
+  delay(500);
+  Serial.println("[*] Starting GMpro87...");
+
   pinMode(btnDeauth, INPUT_PULLUP);
   pinMode(btnScan, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP("GMpro", "Sangkur87");
-  Serial.println("[+] AP 'GMpro' ready");
+  Serial.println("[*] Starting WiFi AP...");
+  
+  bool apStarted = WiFi.softAP("GMpro", "Sangkur87");
+  Serial.print("[+] AP started: "); Serial.println(apStarted ? "YES" : "NO");
+  
+  delay(500);
   Serial.print("[+] IP: "); Serial.println(WiFi.softAPIP());
-
-  WiFi.disconnect();
+  
+  // Force AP channel
+  esp_wifi_set_channel(6, WIFI_SECOND_CHAN_NONE);
+  delay(200);
+  
+  delay(500);
   esp_wifi_set_promiscuous(true);
 
   server.on("/", handleRoot);
@@ -249,8 +260,6 @@ void setup() {
   server.begin();
 
   Serial.println("[+] GMpro87 v2.0 Ready");
-  Serial.println("[*] Connect: GMpro / Sangkur87");
-  Serial.println("[*] Web: http://192.168.4.1");
 }
 
 // --- LOOP ---
