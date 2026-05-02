@@ -26,17 +26,10 @@ jobs:
 
       - name: Compile
         run: |
-          ./arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino
-
-      - name: Find Binaries
-        run: |
-          find . -name "*.bin" -type f
-          BUILD_DIR=$(find . -name "gmpro87.ino.bin" -type f | xargs dirname | head -1)
-          echo "Build: $BUILD_DIR"
-          ls -la "$BUILD_DIR/"
+          ./arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino --output-dir build
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: ./**/gmpro87.ino.bin
+          path: build/*.bin
