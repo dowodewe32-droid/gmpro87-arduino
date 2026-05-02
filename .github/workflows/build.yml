@@ -14,35 +14,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install esptool
-        run: pip install esptool
-
-      - name: Compile Sketch
+      - name: Download Arduino CLI
         run: |
-          pip install arduino-cli
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32
-          arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino
+          curl -fsSL https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz | tar xz
+          chmod +x arduino-cli
 
-      - name: Find and Merge Firmware
+      - name: Setup ESP32 Core
+        run: |
+          ./arduino-cli core update-index
+          ./arduino-cli core install esp32:esp32@3.3.8
+
+      - name: Compile
+        run: |
+          ./arduino-cli compile -b esp32:esp32:esp32 gmpro87/gmpro87.ino
+
+      - name: Find Binaries
         run: |
           find . -name "*.bin" -type f
           BUILD_DIR=$(find . -name "gmpro87.ino.bin" -type f | xargs dirname | head -1)
-          echo "Found build at: $BUILD_DIR"
+          echo "Build: $BUILD_DIR"
           ls -la "$BUILD_DIR/"
-          
-          mkdir -p output
-          # Use app only since Arduino CLI uses prebuilt bootloader
-          cp "$BUILD_DIR/gmpro87.ino.bin" output/gmpro87_full.bin
-          ls -lh output/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gmpro87-firmware
-          path: output/gmpro87_full.bin
+          name: firmware
+          path: ./**/gmpro87.ino.bin
