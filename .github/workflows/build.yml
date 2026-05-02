@@ -1,16 +1,21 @@
-name: Build Complete Firmware
+name: Build & Release Firmware
 
 on:
   push:
+    branches: [master]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Compile
-        uses: arduino/compile-sketches@v1
+
+      - name: Compile Sketch
+        uses: arduino/compile-sketch@v1
         with:
           fqbn: esp32:esp32:esp32
           platforms: |
@@ -20,34 +25,58 @@ jobs:
             - --warnings=default
           sketch-paths: |
             - gmpro87
-      - name: Get Build Path
+
+      - name: Find Build Output
         run: |
-          echo "BUILD_PATH=$(find gmpro87/build -name "*.bin" -type f)" >> $GITHUB_ENV
-      - name: Find Binaries
-        run: |
-          find gmpro87/build -name "*.bin" -type f
-      - name: Download esptool
+          echo "Searching for build output..."
+          find . -name "*.bin" -type f 2>/dev/null
+          echo "---"
+          ls -laR gmpro87/ 2>/dev/null || echo "no gmpro87 dir"
+
+      - name: Install esptool
         run: pip install esptool
+
       - name: Merge Firmware
         run: |
-          cd gmpro87/build/esp32.esp32.esp32
-          ls -la
-          # Check if build files exist
-          if [ -f "bootloader/bootloader.bin" ] && [ -f "partitions.bin" ] && [ -f "boot_app0.bin" ] && [ -f "gmpro87.ino.bin" ]; then
-            echo "All binaries found, merging..."
-            esptoolpy merge_bin \
-              --chip esp32 \
-              /tmp/gmpro87_full.bin \
-              0x1000 bootloader/bootloader.bin \
-              0x8000 partitions.bin \
-              0xe000 boot_app0.bin \
-              0x10000 gmpro87.ino.bin
-            ls -lh /tmp/gmpro87_full.bin
+          # Find the build directory
+          BUILD_DIR=$(find . -path "*/gmpro87/build" -type d 2>/dev/null | head -1)
+          if [ -z "$BUILD_DIR" ]; then
+            BUILD_DIR=$(find . -name "gmpro87.ino.bin" -type f 2>/dev/null | xargs dirname 2>/dev/null | head -1)
+          fi
+          echo "Build dir: $BUILD_DIR"
+          
+          if [ -n "$BUILD_DIR" ] && [ -f "$BUILD_DIR/gmpro87.ino.bin" ]; then
+            mkdir -p output
+            # Check what files exist
+            ls -la "$BUILD_DIR/"
+            
+            # Find bootloader
+            BOOTLOADER=$(find "$BUILD_DIR" -name "bootloader.bin" -path "*/bootloader/*" 2>/dev/null | head -1)
+            PARTITIONS=$(find "$BUILD_DIR" -name "partitions.bin" 2>/dev/null | head -1)
+            
+            echo "Bootloader: $BOOTLOADER"
+            echo "Partitions: $PARTITIONS"
+            
+            if [ -f "$BOOTLOADER" ] && [ -f "$PARTITIONS" ]; then
+              esptool.py merge_bin \
+                --chip esp32 \
+                output/gmpro87_full.bin \
+                0x1000 "$BOOTLOADER" \
+                0x8000 "$PARTITIONS" \
+                0x10000 "$BUILD_DIR/gmpro87.ino.bin"
+              ls -lh output/
+            else
+              echo "Using app only (bootloader not found)"
+              cp "$BUILD_DIR/gmpro87.ino.bin" output/gmpro87_full.bin
+              ls -lh output/
+            fi
           else
-            echo "Using app only - warning!"
-            cp gmpro87.ino.bin /tmp/gmpro87_full.bin
-      - name: Upload Full Firmware
+            echo "Build output not found!"
+            exit 1
+          fi
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware
-          path: /tmp/gmpro87_full.bin
+          name: gmpro87-firmware
+          path: output/gmpro87_full.bin
