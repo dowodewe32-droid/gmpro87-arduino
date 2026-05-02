@@ -157,8 +157,8 @@ void handleRoot() {
   html += "<div class='card'>";
   html += "<h2><i class='fas fa-broadcast-tower'></i> System Status</h2>";
   html += "<div class='stat'><span class='stat-label'>Attack</span><span class='stat-value'><span class='led-indicator " + String(isAttacking ? "led-on" : "led-off") + "'></span>" + String(isAttacking ? "RUNNING" : "STOPPED") + "</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Beacon</span><span class='stat-value'>" + String(isBeaconSpam ? "ACTIVE (" + String(beaconCount) + ")" : "OFF") + "</span></div>";
-  html += "<div class='stat'><span class='stat-label'>Networks</span><span class='stat-value'>" + targetData.num + "</span></div>";
+html += "<div class='stat'><span class='stat-label'>Beacon</span><span class='stat-value'>" + String(isBeaconSpam ? "ACTIVE (" + String(beaconCount) + ")" : "OFF") + "</span></div>";
+  html += "<div class='stat'><span class='stat-label'>Networks</span><span class='stat-value'>" + String(targetData.num) + "</span></div>";
   html += "<div class='stat'><span class='stat-label'>Uptime</span><span class='stat-value' id='timer'>" + uptime + "</span></div>";
   html += "<div class='stat'><span class='stat-label'>Board</span><span class='stat-value'>ESP32-WROOM-32U</span></div>";
   html += "<div class='stat'><span class='stat-label'>Version</span><span class='stat-value'>GMpro87 v2.0</span></div>";
@@ -171,7 +171,7 @@ void handleRoot() {
   
   // === NETWORKS CARD ===
   html += "<div class='card'>";
-  html += "<h2><i class='fas fa-wifi'></i> Networks (" + targetData.num + ")</h2>";
+  html += "<h2><i class='fas fa-wifi'></i> Networks (" + String(targetData.num) + ")</h2>";
   if (targetData.num > 0) {
     html += "<div class='networks'>";
     for (int i = 0; i < targetData.num; i++) {
