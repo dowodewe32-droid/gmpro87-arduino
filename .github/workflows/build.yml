@@ -1,4 +1,4 @@
-name: Build
+name: Build Complete Firmware
 
 on:
   push:
@@ -9,7 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: arduino/compile-sketches@v1
+      - name: Compile
+        uses: arduino/compile-sketches@v1
         with:
           fqbn: esp32:esp32:esp32
           platforms: |
@@ -17,11 +18,36 @@ jobs:
               source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           cli-compile-flags: |
             - --warnings=default
-            - --export-binaries
           sketch-paths: |
             - gmpro87
-      - name: Upload
+      - name: Get Build Path
+        run: |
+          echo "BUILD_PATH=$(find gmpro87/build -name "*.bin" -type f)" >> $GITHUB_ENV
+      - name: Find Binaries
+        run: |
+          find gmpro87/build -name "*.bin" -type f
+      - name: Download esptool
+        run: pip install esptool
+      - name: Merge Firmware
+        run: |
+          cd gmpro87/build/esp32.esp32.esp32
+          ls -la
+          # Check if build files exist
+          if [ -f "bootloader/bootloader.bin" ] && [ -f "partitions.bin" ] && [ -f "boot_app0.bin" ] && [ -f "gmpro87.ino.bin" ]; then
+            echo "All binaries found, merging..."
+            esptoolpy merge_bin \
+              --chip esp32 \
+              /tmp/gmpro87_full.bin \
+              0x1000 bootloader/bootloader.bin \
+              0x8000 partitions.bin \
+              0xe000 boot_app0.bin \
+              0x10000 gmpro87.ino.bin
+            ls -lh /tmp/gmpro87_full.bin
+          else
+            echo "Using app only - warning!"
+            cp gmpro87.ino.bin /tmp/gmpro87_full.bin
+      - name: Upload Full Firmware
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: gmpro87/build/esp32.esp32.esp32/gmpro87.ino.bin
+          path: /tmp/gmpro87_full.bin
